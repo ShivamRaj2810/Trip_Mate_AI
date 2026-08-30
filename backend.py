@@ -1,6 +1,10 @@
-import os 
+import time
+import os
+from time import time 
 import certifi
 from dotenv import load_dotenv
+from typing import Annotated
+import operator
 
 load_dotenv()
 
@@ -68,7 +72,7 @@ class TravelState(TypedDict):
     flight_results: str
     hotel_results: str
     itinerary: str
-    llm_calls: int
+    llm_calls: Annotated[int, operator.add]
     weather_results: str
 
 
@@ -122,6 +126,9 @@ Return concise travel guidance.
 
 # Flight Agent
 def flight_agent(state: TravelState):
+    import time
+
+    start1 = time.perf_counter()
     print("\nINSIDE FLIGHT AGENT\n")
 
     query = state["user_query"]
@@ -162,6 +169,10 @@ def flight_agent(state: TravelState):
     except Exception as e:
 
         flight_data = f"Flight information unavailable: {str(e)}"
+    print(
+    f"FLIGHT AGENT TIME: "
+    f"{time.perf_counter() - start1:.2f} seconds"
+    )
 
     return {
         "flight_results": flight_data,
@@ -182,9 +193,17 @@ def flight_agent(state: TravelState):
 # =========================
 
 def hotel_agent(state: TravelState):
+
+    import time
+    start2 = time.perf_counter()
+    print("\nINSIDE HOTEL AGENT\n")
     query = f"Best hotels for {state['user_query']}"
     # hotel_results = tavily_search(query)
     hotel_results = asyncio.run(tavily_mcp_search(query))
+    print(
+    f"HOTEL AGENT TIME: "
+    f"{time.perf_counter() - start2:.2f} seconds"
+    )
 
     return {
         "hotel_results": hotel_results,
@@ -202,6 +221,10 @@ def hotel_agent(state: TravelState):
 # =========================
 
 def weather_agent(state: TravelState):
+    import time
+
+    start3 = time.perf_counter()
+    print("INSIDE WEATHER AGENT")
 
     city = extract_destination(state["user_query"])
 
@@ -211,6 +234,10 @@ def weather_agent(state: TravelState):
 
     forecast_data = asyncio.run(
         forecast_mcp_search(city)
+    )
+    print(
+    f"WEATHER AGENT TIME: "
+    f"{time.perf_counter() - start3:.2f} seconds"
     )
 
     return {
@@ -236,6 +263,9 @@ def weather_agent(state: TravelState):
 # =========================
 
 def itinerary_agent(state: TravelState):
+    import time
+    start4 = time.perf_counter()
+    print("INSIDE ITINERARY AGENT")
     prompt = f"""
 Create a complete travel itinerary.
 
@@ -258,6 +288,10 @@ Make the itinerary practical, budget-aware, and easy to follow.
         SystemMessage(content="You are an expert travel planner."),
         HumanMessage(content=prompt)
     ])
+    print(
+    f"ITINERARY AGENT TIME: "
+    f"{time.perf_counter() - start4:.2f} seconds"
+    )
 
     return {
         "itinerary": response.content,
@@ -323,6 +357,21 @@ Important:
 # Build Graph
 # =========================
 
+# graph = StateGraph(TravelState)
+
+# graph.add_node("flight_agent", flight_agent)
+# graph.add_node("hotel_agent", hotel_agent)
+# graph.add_node("weather_agent", weather_agent)
+# graph.add_node("itinerary_agent", itinerary_agent)
+# graph.add_node("final_agent", final_agent)
+
+# graph.add_edge(START, "flight_agent")
+# graph.add_edge("flight_agent", "hotel_agent")
+# graph.add_edge("hotel_agent", "weather_agent")
+# graph.add_edge("weather_agent", "itinerary_agent")
+# graph.add_edge("itinerary_agent", "final_agent")
+# graph.add_edge("final_agent", END)
+
 graph = StateGraph(TravelState)
 
 graph.add_node("flight_agent", flight_agent)
@@ -331,10 +380,17 @@ graph.add_node("weather_agent", weather_agent)
 graph.add_node("itinerary_agent", itinerary_agent)
 graph.add_node("final_agent", final_agent)
 
+# Start all research agents in parallel
 graph.add_edge(START, "flight_agent")
-graph.add_edge("flight_agent", "hotel_agent")
-graph.add_edge("hotel_agent", "weather_agent")
+graph.add_edge(START, "hotel_agent")
+graph.add_edge(START, "weather_agent")
+
+# Wait for all research to complete
+graph.add_edge("flight_agent", "itinerary_agent")
+graph.add_edge("hotel_agent", "itinerary_agent")
 graph.add_edge("weather_agent", "itinerary_agent")
+
+# Then generate final response
 graph.add_edge("itinerary_agent", "final_agent")
 graph.add_edge("final_agent", END)
 
