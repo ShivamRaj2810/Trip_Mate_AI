@@ -230,20 +230,46 @@ def weather_agent(state: TravelState):
     import time
 
     start3 = time.perf_counter()
-    print("INSIDE WEATHER AGENT")
+    print("INSIDE WEATHER AGENT", flush=True)
+
+    print("1. Extracting destination...", flush=True)
 
     city = extract_destination(state["user_query"])
+
+    print(
+        f"2. Destination extracted: {city}",
+        flush=True
+    )
+
+    print("3. Calling current weather MCP...", flush=True)
 
     weather_data = asyncio.run(
         weather_mcp_search(city)
     )
 
+    print(
+        "4. Current weather received",
+        flush=True
+    )
+
+    print(
+        "5. Calling forecast MCP...",
+        flush=True
+    )
+
     forecast_data = asyncio.run(
         forecast_mcp_search(city)
     )
+
     print(
-    f"WEATHER AGENT TIME: "
-    f"{time.perf_counter() - start3:.2f} seconds"
+        "6. Forecast received",
+        flush=True
+    )
+
+    print(
+        f"WEATHER AGENT TIME: "
+        f"{time.perf_counter() - start3:.2f} seconds",
+        flush=True
     )
 
     return {
@@ -258,7 +284,8 @@ def weather_agent(state: TravelState):
             AIMessage(
                 content="Weather information fetched"
             )
-        ]
+        ],
+        "llm_calls": 1
     }
 
 
@@ -415,28 +442,11 @@ graph.add_edge("final_agent", END)
 
 
 
-# =========================
-# PostgreSQL Checkpointer
-# Neon + Render + LangGraph
-# =========================
-
 from psycopg_pool import ConnectionPool
-
 
 DATABASE_URL = get_database_url()
 
-
-# Connection pool for Neon PostgreSQL.
-#
-# IMPORTANT:
-# Use the Neon pooled connection string containing
-# "-pooler" in the hostname.
-#
-# Example:
-# postgresql://user:password@ep-xxxxx-pooler....neon.tech/neondb?sslmode=require
-
-
-connection_pool = ConnectionPool(
+pool = ConnectionPool(
     conninfo=DATABASE_URL,
     min_size=1,
     max_size=5,
@@ -446,17 +456,8 @@ connection_pool = ConnectionPool(
     },
 )
 
+checkpointer = PostgresSaver(pool)
 
-# LangGraph PostgreSQL checkpointer
-checkpointer = PostgresSaver(connection_pool)
-
-
-# Create LangGraph checkpoint tables.
-# This should NOT be called for every user request.
-checkpointer.setup()
-
-
-# Compile graph once.
 travel_graph = graph.compile(
     checkpointer=checkpointer
 )
